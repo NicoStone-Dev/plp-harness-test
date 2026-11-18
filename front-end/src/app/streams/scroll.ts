@@ -8,8 +8,12 @@ export function isNearBottom(element: HTMLElement, threshold = BOTTOM_THRESHOLD_
   return element.scrollHeight - element.scrollTop - element.clientHeight <= threshold;
 }
 
-export function scrollToBottom(element: HTMLElement): void {
-  element.scrollTop = element.scrollHeight;
+export function scrollToBottom(element: HTMLElement, behavior: ScrollBehavior = 'auto'): void {
+  if (behavior === 'smooth' && typeof element.scrollTo === 'function') {
+    element.scrollTo({ top: element.scrollHeight, behavior });
+  } else {
+    element.scrollTop = element.scrollHeight;
+  }
 }
 
 /** Emits once, after Angular has rendered the pending changes to the DOM. */

@@ -18,12 +18,16 @@ export interface ChatMessage {
 /** Client -> server. */
 export type ClientEvent =
   | { readonly type: 'join'; readonly name: string }
-  | { readonly type: 'message'; readonly text: string };
+  | { readonly type: 'message'; readonly text: string }
+  /** The user typed in the message box (FR-10). */
+  | { readonly type: 'typing' };
 
 /** Server -> client. */
 export type ServerEvent =
   | { readonly type: 'joined'; readonly userId: string; readonly name: string }
-  | { readonly type: 'message'; readonly message: ChatMessage };
+  | { readonly type: 'message'; readonly message: ChatMessage }
+  /** Another user is typing (FR-11). */
+  | { readonly type: 'typing'; readonly userId: string; readonly name: string };
 
 /** Trimmed name if it has 1–20 characters, otherwise null. */
 export function normalizeName(raw: string): string | null {
@@ -55,6 +59,8 @@ export function parseClientEvent(raw: string): ClientEvent | null {
       const normalized = text === null ? null : normalizeText(text);
       return normalized === null ? null : { type: 'message', text: normalized };
     }
+    case 'typing':
+      return { type: 'typing' };
     default:
       return null;
   }
@@ -74,6 +80,11 @@ export function parseServerEvent(raw: string): ServerEvent | null {
     case 'message': {
       const message = asChatMessage(data['message']);
       return message === null ? null : { type: 'message', message };
+    }
+    case 'typing': {
+      const userId = asString(data['userId']);
+      const name = asString(data['name']);
+      return userId === null || name === null ? null : { type: 'typing', userId, name };
     }
     default:
       return null;

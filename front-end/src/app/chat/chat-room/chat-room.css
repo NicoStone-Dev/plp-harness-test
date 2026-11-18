@@ -35,6 +35,14 @@
   white-space: nowrap;
 }
 
+.list {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .messages {
   flex: 1;
   min-height: 0;
@@ -98,9 +106,88 @@
   color: var(--text-subtle);
 }
 
+/* FR-16: unread pill, bottom center of the list */
+.pill {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 20px 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgb(37 99 235 / 0.35);
+}
+
+.pill:hover {
+  background: var(--accent-hover);
+}
+
+.pill:focus-visible {
+  outline: 3px solid var(--accent-ring);
+  outline-offset: 2px;
+}
+
+/* FR-14: the indicator lives in a fixed-height strip */
 .strip {
   flex: none;
   height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 24px;
+  overflow: hidden;
+  font-size: 13px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.typing {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.typing strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.dots {
+  flex: none;
+  display: inline-flex;
+  gap: 4px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--bubble);
+}
+
+.dots i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--text-subtle);
+  animation: bounce 1.2s infinite ease-in-out;
+}
+
+.dots i:nth-child(2) { animation-delay: 0.15s; }
+.dots i:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes bounce {
+  0%, 60%, 100% { opacity: 0.4; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-2px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dots i { animation: none; }
 }
 
 .composer {
