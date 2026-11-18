@@ -1,0 +1,29 @@
+<main class="screen">
+  <section class="card join">
+    <div class="logo" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
+        <path d="M8 12h.01" />
+        <path d="M12 12h.01" />
+        <path d="M16 12h.01" />
+      </svg>
+    </div>
+
+    <h1 class="title">Chat reativo</h1>
+    <p class="lead">Entre com um nome para começar a conversar.</p>
+
+    <form class="form" (submit)="$event.preventDefault(); submit$.next()">
+      <label class="label" for="name">Seu nome</label>
+      <input id="name" class="input" type="text" autocomplete="off" autofocus
+             [formControl]="name" aria-describedby="name-hint" />
+      <p id="name-hint" class="hint">De 1 a 20 caracteres.</p>
+      <button type="submit" class="btn-primary" [disabled]="!(canJoin$ | async)">Entrar</button>
+    </form>
+
+    <footer class="footer">
+      <span class="dot" aria-hidden="true"></span>
+      Sala geral
+    </footer>
+  </section>
+</main>

@@ -1,0 +1,117 @@
+.chat {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 760px;
+  height: min(636px, calc(100dvh - 32px));
+  overflow: hidden;
+}
+
+.header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.room {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.me {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 4px 4px;
+  border-radius: 999px;
+  background: var(--bg);
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.messages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 0;
+  padding: 24px 24px 8px;
+  list-style: none;
+}
+
+.message {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  max-width: 80%;
+}
+
+.message.own {
+  align-self: flex-end;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.own .body {
+  align-items: flex-end;
+}
+
+.author {
+  margin-bottom: 4px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--tone-fg);
+}
+
+.bubble {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--bubble);
+  font-size: 15px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.own .bubble {
+  background: var(--accent);
+  color: #fff;
+}
+
+.time {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+.strip {
+  flex: none;
+  height: 32px;
+}
+
+.composer {
+  flex: none;
+  display: flex;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+}
+
+.composer .input {
+  flex: 1;
+  min-width: 0;
+}
