@@ -1,21 +1,11 @@
 import { AsyncPipe, DatePipe } from '@angular/common';
-import {
-  Component,
-  computed,
-  DestroyRef,
-  ElementRef,
-  inject,
-  Injector,
-  input,
-  OnInit,
-  viewChild,
-} from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Component, computed, ElementRef, inject, Injector, input, OnInit, viewChild } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
-import { filter, map, switchMap } from 'rxjs';
+import { tap } from 'rxjs';
 import { initialOf, toneOf } from '../../domain/message-view';
 import type { ChatSession } from '../../streams/chat-session';
-import { isNearBottom, nextRender, scrollToBottom } from '../../streams/scroll';
+import { autoScroll$, isNearBottom, nextRender, scrollToBottom } from '../../streams/scroll';
 
 @Component({
   selector: 'app-chat-room',
@@ -32,28 +22,29 @@ export class ChatRoom implements OnInit {
 
   private readonly list = viewChild.required<ElementRef<HTMLElement>>('list');
   private readonly injector = inject(Injector);
-  private readonly destroyRef = inject(DestroyRef);
 
   ngOnInit(): void {
     const session = this.session();
+    const element = () => this.list().nativeElement;
+
+    // Side-effect pipelines are bound to this component's lifetime with toSignal:
+    // the subscription ends when the component's injector is destroyed.
 
     // FR-05 / FR-06: decide *before* the new message is rendered, scroll *after*.
-    session.message$
-      .pipe(
-        map((message) => message.own || isNearBottom(this.list().nativeElement)),
-        filter(Boolean),
-        switchMap(() => nextRender(this.injector)),
-        takeUntilDestroyed(this.destroyRef),
-      )
-      .subscribe(() => scrollToBottom(this.list().nativeElement));
+    toSignal(
+      autoScroll$(
+        session.message$,
+        () => isNearBottom(element()),
+        () => nextRender(this.injector),
+      ).pipe(tap(() => scrollToBottom(element()))),
+      { injector: this.injector },
+    );
 
     // FR-02: clear the input once the text has been sent.
-    session.sent$
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(() => this.draft.setValue(''));
+    toSignal(session.sent$.pipe(tap(() => this.draft.setValue(''))), { injector: this.injector });
   }
 
   protected send(): void {
-    this.session().outgoing.next(this.draft.value);
+    this.session().submit(this.draft.value);
   }
 }

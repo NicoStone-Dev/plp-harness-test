@@ -72,6 +72,7 @@ back-end/src/
   domain/events.ts        protocol types + validation (shared copy)
   domain/chat-message.ts  stamps a message with id and server time
   streams/socket.ts       ws sockets as Observables (connections, events, close, errors)
+  streams/chat-client.ts  ChatClient: a transport-agnostic connected client
   streams/chat-room.ts    the room: per-client sessions merged into one broadcast stream
   server.ts               wires the WebSocketServer to the room
 
@@ -79,8 +80,9 @@ front-end/src/app/
   domain/events.ts        protocol types + validation (shared copy)
   domain/message-view.ts  what the UI renders for a message (own?, avatar initial/color)
   services/chat-socket.service.ts  rxjs/webSocket connection → Observable<ServerEvent>
-  streams/chat-session.ts message$, messages$ (scan), outgoing text → sent$
-  streams/scroll.ts       near-bottom check, scroll helpers, nextRender()
+  streams/chat-connection.ts       ChatConnection interface (implemented by the service)
+  streams/chat-session.ts message$, messages$ (scan), submit(text) → sent$
+  streams/scroll.ts       near-bottom check, autoScroll$, scroll helpers, nextRender()
   chat/join/              name screen (docs/design/join.png)
   chat/chat-room/         chat screen (docs/design/typing.png, minus the indicator)
   app.ts                  join$ → session$ → which screen to show
@@ -105,11 +107,11 @@ and `messages$` accumulates them with `scan`. The scroll rule (FR-05, FR-06)
 is a pipeline on `message$`:
 
 ```ts
-message$.pipe(
-  map(m => m.own || isNearBottom(list)),  // measured before the DOM updates
-  filter(Boolean),
-  switchMap(() => nextRender(injector)),  // wait for Angular to render it
-).subscribe(() => scrollToBottom(list));
+autoScroll$(
+  message$,
+  () => isNearBottom(list),               // measured before the DOM updates
+  () => nextRender(injector),             // wait for Angular to render it
+).pipe(tap(() => scrollToBottom(list)))   // bound to the component with toSignal
 ```
 
 The form inputs are also streams. `valueChanges` drives the "Entrar"
