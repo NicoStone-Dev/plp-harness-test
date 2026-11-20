@@ -1,7 +1,8 @@
 import type { EventEmitter } from 'node:events';
-import { filter, Observable, take } from 'rxjs';
-import type { RawData, WebSocket, WebSocketServer } from 'ws';
-import { parseClientEvent, type ClientEvent } from '../domain/events.js';
+import { filter, map, Observable, take } from 'rxjs';
+import { WebSocket, type RawData, type WebSocketServer } from 'ws';
+import { parseClientEvent, type ClientEvent, type ServerEvent } from '../domain/events.js';
+import type { ChatClient } from './chat-client.js';
 
 /**
  * Node-style listener (`on`/`off`) as an Observable.
@@ -25,6 +26,20 @@ export function connection$(server: WebSocketServer): Observable<WebSocket> {
   return fromEmitter(server, 'connection', (socket: WebSocket) => socket);
 }
 
+/** Every client that connects, adapted to the transport-agnostic `ChatClient`. */
+export function chatClient$(server: WebSocketServer): Observable<ChatClient> {
+  return connection$(server).pipe(map(toChatClient));
+}
+
+export function toChatClient(socket: WebSocket): ChatClient {
+  return {
+    event$: clientEvent$(socket),
+    closed$: closed$(socket),
+    error$: socketError$(socket),
+    send: (event) => send(socket, event),
+  };
+}
+
 /** Valid events sent by one client. Binary frames and invalid data are dropped (FR-08). */
 export function clientEvent$(socket: WebSocket): Observable<ClientEvent> {
   return fromEmitter(socket, 'message', (data: RawData, isBinary: boolean) =>
@@ -40,6 +55,10 @@ export function closed$(socket: WebSocket): Observable<void> {
 /** Protocol errors on one socket (bad frames, oversized payloads, ...). */
 export function socketError$(socket: WebSocket): Observable<Error> {
   return fromEmitter(socket, 'error', (error: Error) => error);
+}
+
+function send(socket: WebSocket, event: ServerEvent): void {
+  if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(event));
 }
 
 function rawDataToText(data: RawData): string {

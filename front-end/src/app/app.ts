@@ -15,10 +15,14 @@ import { chatSession } from './streams/chat-session';
 export class App {
   private readonly sockets = inject(ChatSocketService);
 
-  protected readonly join$ = new Subject<string>();
+  private readonly join$ = new Subject<string>();
 
   protected readonly session$ = this.join$.pipe(
     take(1),
     map((name) => chatSession(name, this.sockets.connect(name))),
   );
+
+  protected join(name: string): void {
+    this.join$.next(name);
+  }
 }

@@ -1,6 +1,6 @@
 import { WebSocketServer } from 'ws';
 import { chatRoom } from './streams/chat-room.js';
-import { connection$, fromEmitter } from './streams/socket.js';
+import { chatClient$, fromEmitter } from './streams/socket.js';
 
 const PORT = Number(process.env['PORT'] ?? 3000);
 
@@ -16,4 +16,4 @@ fromEmitter(server, 'error', (error: Error) => error).subscribe((error) => {
   process.exit(1);
 });
 
-chatRoom(connection$(server)).subscribe();
+chatRoom(chatClient$(server)).subscribe();

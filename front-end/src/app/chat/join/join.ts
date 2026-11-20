@@ -20,7 +20,7 @@ export class Join {
     map((value) => normalizeName(value) !== null),
   );
 
-  protected readonly submit$ = new Subject<void>();
+  private readonly submit$ = new Subject<void>();
 
   /** The trimmed, validated name. */
   readonly joined = outputFromObservable(
@@ -29,4 +29,8 @@ export class Join {
       filter((name): name is string => name !== null),
     ),
   );
+
+  protected submit(): void {
+    this.submit$.next();
+  }
 }

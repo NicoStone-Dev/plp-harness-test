@@ -1,0 +1,88 @@
+import { describe, expect, it } from 'vitest';
+import {
+  MESSAGE_MAX_LENGTH,
+  NAME_MAX_LENGTH,
+  normalizeName,
+  normalizeText,
+  parseClientEvent,
+  parseServerEvent,
+} from './events';
+
+describe('normalizeName (FR-01)', () => {
+  it('trims and accepts 1 to 20 characters', () => {
+    expect(normalizeName('  Ana  ')).toBe('Ana');
+    expect(normalizeName('x'.repeat(NAME_MAX_LENGTH))).toBe('x'.repeat(NAME_MAX_LENGTH));
+  });
+
+  it('rejects blank and too-long names', () => {
+    expect(normalizeName('')).toBeNull();
+    expect(normalizeName('   ')).toBeNull();
+    expect(normalizeName('x'.repeat(NAME_MAX_LENGTH + 1))).toBeNull();
+  });
+
+  it('counts code points, not UTF-16 units', () => {
+    expect(normalizeName('😀'.repeat(NAME_MAX_LENGTH))).not.toBeNull();
+  });
+});
+
+describe('normalizeText (FR-02)', () => {
+  it('trims and rejects blank or too-long text', () => {
+    expect(normalizeText('  hi ')).toBe('hi');
+    expect(normalizeText(' \n\t ')).toBeNull();
+    expect(normalizeText('x'.repeat(MESSAGE_MAX_LENGTH))).not.toBeNull();
+    expect(normalizeText('x'.repeat(MESSAGE_MAX_LENGTH + 1))).toBeNull();
+  });
+});
+
+describe('parseClientEvent', () => {
+  it('parses valid join and message events, normalized', () => {
+    expect(parseClientEvent('{"type":"join","name":" Ana "}')).toEqual({ type: 'join', name: 'Ana' });
+    expect(parseClientEvent('{"type":"message","text":" hi "}')).toEqual({
+      type: 'message',
+      text: 'hi',
+    });
+  });
+
+  // R8: bad input is parsed to null, never thrown.
+  it.each([
+    ['not json', '{oops'],
+    ['empty string', ''],
+    ['null', 'null'],
+    ['array', '[1,2]'],
+    ['number', '42'],
+    ['unknown type', '{"type":"hack"}'],
+    ['missing name', '{"type":"join"}'],
+    ['non-string name', '{"type":"join","name":7}'],
+    ['blank name', '{"type":"join","name":"   "}'],
+    ['blank text', '{"type":"message","text":"  "}'],
+    ['too-long text', JSON.stringify({ type: 'message', text: 'x'.repeat(1001) })],
+  ])('returns null for %s (R8)', (_label, raw) => {
+    expect(() => parseClientEvent(raw)).not.toThrow();
+    expect(parseClientEvent(raw)).toBeNull();
+  });
+});
+
+describe('parseServerEvent', () => {
+  const message = { id: 'm1', authorId: 'u1', author: 'Ana', text: 'hi', sentAt: 1 };
+
+  it('parses valid joined and message events', () => {
+    expect(parseServerEvent('{"type":"joined","userId":"u1","name":"Ana"}')).toEqual({
+      type: 'joined',
+      userId: 'u1',
+      name: 'Ana',
+    });
+    expect(parseServerEvent(JSON.stringify({ type: 'message', message }))).toEqual({
+      type: 'message',
+      message,
+    });
+  });
+
+  it.each([
+    ['not json', '<html>'],
+    ['joined without userId', '{"type":"joined","name":"Ana"}'],
+    ['message without body', '{"type":"message"}'],
+    ['non-finite sentAt', JSON.stringify({ type: 'message', message: { ...message, sentAt: 'x' } })],
+  ])('returns null for %s (R8)', (_label, raw) => {
+    expect(parseServerEvent(raw)).toBeNull();
+  });
+});

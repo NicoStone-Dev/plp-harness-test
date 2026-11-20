@@ -6,7 +6,11 @@
     "start": "ng serve",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test"
+    "test": "ng test --watch=false",
+    "test:watch": "ng test",
+    "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.spec.json --noEmit",
+    "lint": "eslint --max-warnings=0 .",
+    "lint:deps": "depcruise src --config .dependency-cruiser.cjs"
   },
   "private": true,
   "packageManager": "npm@11.12.1",
@@ -24,9 +28,15 @@
     "@angular/build": "^22.2.7",
     "@angular/cli": "^22.2.7",
     "@angular/compiler-cli": "^22.2.0",
+    "@eslint/js": "^10.0.1",
+    "angular-eslint": "^22.8.0",
+    "dependency-cruiser": "^18.8.0",
+    "eslint": "^10.15.0",
+    "eslint-plugin-rxjs-x": "^1.0.6",
     "jsdom": "^30.0.0",
     "prettier": "^3.8.1",
     "typescript": "~6.0.2",
+    "typescript-eslint": "^8.73.0",
     "vitest": "^5.0.0"
   }
 }

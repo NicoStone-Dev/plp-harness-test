@@ -13,12 +13,12 @@
     <h1 class="title">Chat reativo</h1>
     <p class="lead">Entre com um nome para começar a conversar.</p>
 
-    <form class="form" (submit)="$event.preventDefault(); submit$.next()">
+    <form class="form" (submit)="$event.preventDefault(); submit()">
       <label class="label" for="name">Seu nome</label>
       <input id="name" class="input" type="text" autocomplete="off" autofocus
              [formControl]="name" aria-describedby="name-hint" />
       <p id="name-hint" class="hint">De 1 a 20 caracteres.</p>
-      <button type="submit" class="btn-primary" [disabled]="!(canJoin$ | async)">Entrar</button>
+      <button type="submit" class="btn-primary" [disabled]="(canJoin$ | async) !== true">Entrar</button>
     </form>
 
     <footer class="footer">

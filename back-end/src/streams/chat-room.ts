@@ -16,10 +16,9 @@ import {
   tap,
   type Observable,
 } from 'rxjs';
-import { WebSocket } from 'ws';
 import { createMessage } from '../domain/chat-message.js';
 import type { ChatMessage, ClientEvent, ServerEvent } from '../domain/events.js';
-import { clientEvent$, closed$, socketError$ } from './socket.js';
+import type { ChatClient } from './chat-client.js';
 
 type JoinEvent = Extract<ClientEvent, { type: 'join' }>;
 type SendEvent = Extract<ClientEvent, { type: 'message' }>;
@@ -31,18 +30,19 @@ const isSend = (event: ClientEvent): event is SendEvent => event.type === 'messa
  * One chat room. Every joined client's messages are merged into `room$`
  * and fanned out to every joined client, in the order the server received them.
  */
-export function chatRoom(connections: Observable<WebSocket>): Observable<never> {
+export function chatRoom(client$: Observable<ChatClient>): Observable<never> {
+  // Private to this room: only handed to the room's own sessions.
   const room$ = new Subject<ChatMessage>();
 
-  return connections.pipe(
+  return client$.pipe(
     // One failing client must never take the room (or the server) down.
-    mergeMap((socket) => clientSession(socket, room$).pipe(catchError(() => EMPTY))),
+    mergeMap((client) => clientSession(client, room$).pipe(catchError(() => EMPTY))),
   );
 }
 
-function clientSession(socket: WebSocket, room$: Subject<ChatMessage>): Observable<never> {
+function clientSession(client: ChatClient, room$: Subject<ChatMessage>): Observable<never> {
   const userId = randomUUID();
-  const event$ = clientEvent$(socket);
+  const { event$ } = client;
 
   // The first valid join names the client; later joins are ignored.
   const name$ = event$.pipe(
@@ -59,7 +59,7 @@ function clientSession(socket: WebSocket, room$: Subject<ChatMessage>): Observab
         concat(
           of<ServerEvent>({ type: 'joined', userId, name }),
           room$.pipe(map((message): ServerEvent => ({ type: 'message', message }))),
-        ).pipe(tap((event) => send(socket, event))),
+        ).pipe(tap((event) => client.send(event))),
 
         // Inbound: this client's messages go to the room.
         event$.pipe(
@@ -72,13 +72,9 @@ function clientSession(socket: WebSocket, room$: Subject<ChatMessage>): Observab
   );
 
   // Swallow socket errors so they are never thrown as unhandled 'error' events.
-  const error$ = socketError$(socket).pipe(
+  const error$ = client.error$.pipe(
     tap((error) => console.warn(`[socket ${userId.slice(0, 8)}] ${error.message}`)),
   );
 
-  return merge(session$, error$).pipe(ignoreElements(), takeUntil(closed$(socket)));
-}
-
-function send(socket: WebSocket, event: ServerEvent): void {
-  if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(event));
+  return merge(session$, error$).pipe(ignoreElements(), takeUntil(client.closed$));
 }
