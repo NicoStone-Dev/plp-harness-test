@@ -35,6 +35,11 @@ describe('normalizeText (FR-02)', () => {
 });
 
 describe('parseClientEvent', () => {
+  it('parses a typing event and ignores extra fields (FR-10)', () => {
+    expect(parseClientEvent('{"type":"typing"}')).toEqual({ type: 'typing' });
+    expect(parseClientEvent('{"type":"typing","name":"Mallory","userId":"x"}')).toEqual({ type: 'typing' });
+  });
+
   it('parses valid join and message events, normalized', () => {
     expect(parseClientEvent('{"type":"join","name":" Ana "}')).toEqual({ type: 'join', name: 'Ana' });
     expect(parseClientEvent('{"type":"message","text":" hi "}')).toEqual({
@@ -56,6 +61,8 @@ describe('parseClientEvent', () => {
     ['blank name', '{"type":"join","name":"   "}'],
     ['blank text', '{"type":"message","text":"  "}'],
     ['too-long text', JSON.stringify({ type: 'message', text: 'x'.repeat(1001) })],
+    ['typing with wrong case', '{"type":"Typing"}'],
+    ['typing as a bare string', '"typing"'],
   ])('returns null for %s (R8)', (_label, raw) => {
     expect(() => parseClientEvent(raw)).not.toThrow();
     expect(parseClientEvent(raw)).toBeNull();
@@ -64,6 +71,14 @@ describe('parseClientEvent', () => {
 
 describe('parseServerEvent', () => {
   const message = { id: 'm1', authorId: 'u1', author: 'Ana', text: 'hi', sentAt: 1 };
+
+  it('parses a valid typing event (FR-11)', () => {
+    expect(parseServerEvent('{"type":"typing","userId":"u2","name":"Bruno"}')).toEqual({
+      type: 'typing',
+      userId: 'u2',
+      name: 'Bruno',
+    });
+  });
 
   it('parses valid joined and message events', () => {
     expect(parseServerEvent('{"type":"joined","userId":"u1","name":"Ana"}')).toEqual({
@@ -81,6 +96,10 @@ describe('parseServerEvent', () => {
     ['not json', '<html>'],
     ['joined without userId', '{"type":"joined","name":"Ana"}'],
     ['message without body', '{"type":"message"}'],
+    ['unknown type', '{"type":"kick","userId":"u1"}'],
+    ['typing without userId', '{"type":"typing","name":"Ana"}'],
+    ['typing without name', '{"type":"typing","userId":"u1"}'],
+    ['typing with non-string name', '{"type":"typing","userId":"u1","name":5}'],
     ['non-finite sentAt', JSON.stringify({ type: 'message', message: { ...message, sentAt: 'x' } })],
   ])('returns null for %s (R8)', (_label, raw) => {
     expect(parseServerEvent(raw)).toBeNull();

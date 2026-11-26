@@ -35,6 +35,14 @@
   white-space: nowrap;
 }
 
+.list-area {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .messages {
   flex: 1;
   min-height: 0;
@@ -98,9 +106,105 @@
   color: var(--text-subtle);
 }
 
+.unread-pill {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border: none;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgb(37 99 235 / 0.35);
+  transition: background 0.15s;
+}
+
+.unread-pill:hover {
+  background: var(--accent-hover);
+}
+
+.unread-pill:focus-visible {
+  outline: none;
+  box-shadow:
+    0 6px 18px rgb(37 99 235 / 0.35),
+    0 0 0 3px var(--accent-ring);
+}
+
+/* FR-14: fixed height whether or not anyone is typing, so the layout never jumps. */
 .strip {
   flex: none;
   height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 24px;
+  overflow: hidden;
+  font-size: 13px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.strip strong {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.typing-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dots {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--bubble);
+}
+
+.dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-subtle);
+  animation: typing-dot 1.2s ease-in-out infinite;
+}
+
+.dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes typing-dot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.4;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dots span {
+    animation: none;
+  }
 }
 
 .composer {
