@@ -3,11 +3,9 @@
 A real-time group chat written in reactive style with RxJS on both ends:
 a Node WebSocket server (`back-end/`) and an Angular client (`front-end/`).
 
-This is the **baseline** for the experiment. It implements the base app
-(FR-01 to FR-08 in [`docs/requirements.md`](docs/requirements.md)). The typing
-indicator and unread counter (FR-10 to FR-19) are deliberately **not**
-implemented. The chat screen keeps an empty 32 px strip between the message
-list and the input, where the indicator will go.
+It implements the base app (FR-01 to FR-08 in
+[`docs/requirements.md`](docs/requirements.md)) plus the typing indicator and
+unread counter (FR-10 to FR-19). How they are tested: [`docs/testing.md`](docs/testing.md).
 
 ## Running
 
@@ -32,12 +30,15 @@ Open http://localhost:4200 in two or more tabs and join with different names.
 | `npm run dev`       | Run the server with tsx, reload on change |
 | `npm start`         | Run the server once with tsx          |
 | `npm run typecheck` | Type-check with `tsc --noEmit`        |
-| `npm run build`     | Compile to `dist/`                    |
+| `npm run build`     | Compile to `dist/` (tests excluded)   |
+| `npm test`          | Run the vitest suite                  |
+| `npm run test:coverage` | Same, with v8 coverage            |
 
 | Command (front-end) | What it does                          |
 | ------------------- | ------------------------------------- |
 | `npm start`         | `ng serve` on port 4200               |
 | `npm run build`     | Production build to `dist/front-end`  |
+| `npx ng test --watch=false` | Run the vitest suite once     |
 
 The server port can be changed with `PORT=…`. The client always connects to
 port 3000 on the host it was loaded from (`CHAT_SERVER_URL` in
@@ -56,8 +57,10 @@ cmp back-end/src/domain/events.ts front-end/src/app/domain/events.ts
 | --------------- | -------------------------------------- | ------- |
 | client → server | `{ type: 'join', name }`               | Must come first. Name is trimmed, 1–20 characters. |
 | client → server | `{ type: 'message', text }`            | Text is trimmed, 1–1000 characters. |
+| client → server | `{ type: 'typing' }`                   | The user typed in the message box. Throttled to one per 500 ms (client and server). |
 | server → client | `{ type: 'joined', userId, name }`     | Join accepted; `userId` identifies your own messages. |
 | server → client | `{ type: 'message', message }`         | `message = { id, authorId, author, text, sentAt }`. `sentAt` is the server's clock in epoch ms. |
+| server → client | `{ type: 'typing', userId, name }`     | Someone else is typing. Never sent back to the typist. |
 
 The same file has the validators (`normalizeName`, `normalizeText`,
 `parseClientEvent`, `parseServerEvent`), so both sides apply the same rules.
@@ -83,8 +86,10 @@ front-end/src/app/
   streams/chat-connection.ts       ChatConnection interface (implemented by the service)
   streams/chat-session.ts message$, messages$ (scan), submit(text) → sent$
   streams/scroll.ts       near-bottom check, autoScroll$, scroll helpers, nextRender()
+  streams/typing.ts       typingNotices$ (throttle), typingNames$ (who is typing), label text
+  streams/unread.ts       unreadCount$ (scan over messages and resets), pill label
   chat/join/              name screen (docs/design/join.png)
-  chat/chat-room/         chat screen (docs/design/typing.png, minus the indicator)
+  chat/chat-room/         chat screen (docs/design/typing.png, unread.png)
   app.ts                  join$ → session$ → which screen to show
 ```
 
@@ -131,6 +136,9 @@ actually sent (FR-02).
 | FR-06 | same pipeline (`message.own` always scrolls) |
 | FR-07 | room is a plain `Subject`; clients subscribe only after joining |
 | FR-08 | `parseClientEvent`, per-session `catchError`, socket error stream, `maxPayload` |
+| FR-10 | `streams/typing.ts` (`typingNotices$`), `back-end/src/streams/chat-room.ts` (`throttleTime`) |
+| FR-11–FR-13 | `streams/typing.ts` (`typingNames$`, `typingSegments`); server skips the typist |
+| FR-14 | `.typing` strip in `chat-room.css` (fixed 32 px) |
+| FR-15–FR-19 | `streams/unread.ts` (`unreadCount$`), pill in `chat-room.html` |
 
-Out of scope for this baseline: FR-10 to FR-19, the "pessoas online" count,
-reconnection, persistence, and tests.
+Out of scope: the "pessoas online" count, reconnection and persistence.

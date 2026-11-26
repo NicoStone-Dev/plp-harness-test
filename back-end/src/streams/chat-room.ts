@@ -14,25 +14,35 @@ import {
   take,
   takeUntil,
   tap,
+  throttleTime,
   type Observable,
 } from 'rxjs';
 import { createMessage } from '../domain/chat-message.js';
-import type { ChatMessage, ClientEvent, ServerEvent } from '../domain/events.js';
+import { TYPING_THROTTLE_MS, type ClientEvent, type ServerEvent } from '../domain/events.js';
 import type { ChatClient } from './chat-client.js';
 
 type JoinEvent = Extract<ClientEvent, { type: 'join' }>;
 type SendEvent = Extract<ClientEvent, { type: 'message' }>;
+type TypingEvent = Extract<ClientEvent, { type: 'typing' }>;
+/** What is said in the room: messages and typing notices. */
+type RoomEvent = Extract<ServerEvent, { type: 'message' | 'typing' }>;
 
 const isJoin = (event: ClientEvent): event is JoinEvent => event.type === 'join';
 const isSend = (event: ClientEvent): event is SendEvent => event.type === 'message';
+const isTyping = (event: ClientEvent): event is TypingEvent => event.type === 'typing';
+
+/** FR-13: a user's own typing notices are never sent back to them. */
+const isEcho = (event: RoomEvent, userId: string): boolean =>
+  event.type === 'typing' && event.userId === userId;
 
 /**
- * One chat room. Every joined client's messages are merged into `room$`
- * and fanned out to every joined client, in the order the server received them.
+ * One chat room. Every joined client's messages and typing notices are merged
+ * into `room$` and fanned out to every joined client, in the order the server
+ * received them.
  */
 export function chatRoom(client$: Observable<ChatClient>): Observable<never> {
   // Private to this room: only handed to the room's own sessions.
-  const room$ = new Subject<ChatMessage>();
+  const room$ = new Subject<RoomEvent>();
 
   return client$.pipe(
     // One failing client must never take the room (or the server) down.
@@ -40,7 +50,7 @@ export function chatRoom(client$: Observable<ChatClient>): Observable<never> {
   );
 }
 
-function clientSession(client: ChatClient, room$: Subject<ChatMessage>): Observable<never> {
+function clientSession(client: ChatClient, room$: Subject<RoomEvent>): Observable<never> {
   const userId = randomUUID();
   const { event$ } = client;
 
@@ -58,14 +68,23 @@ function clientSession(client: ChatClient, room$: Subject<ChatMessage>): Observa
         // `room$` is a plain Subject, so there is no history (FR-07).
         concat(
           of<ServerEvent>({ type: 'joined', userId, name }),
-          room$.pipe(map((message): ServerEvent => ({ type: 'message', message }))),
+          room$.pipe(filter((event) => !isEcho(event, userId))),
         ).pipe(tap((event) => client.send(event))),
 
         // Inbound: this client's messages go to the room.
         event$.pipe(
           filter(isSend),
-          map((event) => createMessage(userId, name, event.text)),
-          tap((message) => room$.next(message)),
+          map((event): RoomEvent => ({ type: 'message', message: createMessage(userId, name, event.text) })),
+          tap((event) => room$.next(event)),
+        ),
+
+        // Inbound: this client's typing notices go to the room, at most one per
+        // 500 ms (FR-10), even if a misbehaving client sends more.
+        event$.pipe(
+          filter(isTyping),
+          throttleTime(TYPING_THROTTLE_MS),
+          map((): RoomEvent => ({ type: 'typing', userId, name })),
+          tap((event) => room$.next(event)),
         ),
       ),
     ),
