@@ -44,6 +44,17 @@ describe('clientEvent$ (R8, FR-08)', () => {
       { type: 'message', text: 'hi' },
     ]);
   });
+
+  it('accepts typing frames and drops malformed ones (FR-10, R8)', async () => {
+    const socket = new FakeSocket();
+    const events = firstValueFrom(clientEvent$(asSocket(socket)).pipe(take(1), toArray()));
+
+    socket.emit('message', frame('{"type":"typ'), false);
+    socket.emit('message', frame({ type: 'typing' }), true); // binary
+    socket.emit('message', frame({ type: 'typing', userId: 'x' }), false);
+
+    expect(await events).toEqual([{ type: 'typing' }]);
+  });
 });
 
 describe('closed$', () => {

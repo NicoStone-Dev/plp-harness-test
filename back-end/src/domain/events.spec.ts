@@ -56,9 +56,18 @@ describe('parseClientEvent', () => {
     ['blank name', '{"type":"join","name":"   "}'],
     ['blank text', '{"type":"message","text":"  "}'],
     ['too-long text', JSON.stringify({ type: 'message', text: 'x'.repeat(1001) })],
+    ['typing as a string', '"typing"'],
+    ['typing in an array', '[{"type":"typing"}]'],
   ])('returns null for %s (R8)', (_label, raw) => {
     expect(() => parseClientEvent(raw)).not.toThrow();
     expect(parseClientEvent(raw)).toBeNull();
+  });
+});
+
+describe('parseClientEvent typing (FR-10)', () => {
+  it('parses a typing event and drops any extra fields', () => {
+    expect(parseClientEvent('{"type":"typing"}')).toEqual({ type: 'typing' });
+    expect(parseClientEvent('{"type":"typing","userId":"spoofed","name":"Eve"}')).toEqual({ type: 'typing' });
   });
 });
 
@@ -77,11 +86,22 @@ describe('parseServerEvent', () => {
     });
   });
 
+  it('parses a valid typing event (FR-11)', () => {
+    expect(parseServerEvent('{"type":"typing","userId":"u1","name":"Ana"}')).toEqual({
+      type: 'typing',
+      userId: 'u1',
+      name: 'Ana',
+    });
+  });
+
   it.each([
     ['not json', '<html>'],
     ['joined without userId', '{"type":"joined","name":"Ana"}'],
     ['message without body', '{"type":"message"}'],
     ['non-finite sentAt', JSON.stringify({ type: 'message', message: { ...message, sentAt: 'x' } })],
+    ['typing without userId', '{"type":"typing","name":"Ana"}'],
+    ['typing without name', '{"type":"typing","userId":"u1"}'],
+    ['typing with non-string name', '{"type":"typing","userId":"u1","name":3}'],
   ])('returns null for %s (R8)', (_label, raw) => {
     expect(parseServerEvent(raw)).toBeNull();
   });

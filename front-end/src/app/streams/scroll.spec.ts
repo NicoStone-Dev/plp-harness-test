@@ -1,7 +1,7 @@
 import { of } from 'rxjs';
 import { TestScheduler } from 'rxjs/testing';
-import { beforeEach, describe, expect, it } from 'vitest';
-import { autoScroll$, BOTTOM_THRESHOLD_PX, isNearBottom, scrollToBottom } from './scroll';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { autoScroll$, BOTTOM_THRESHOLD_PX, isNearBottom, scrollToBottom, smoothScrollToBottom } from './scroll';
 
 let scheduler: TestScheduler;
 
@@ -26,6 +26,21 @@ describe('scrollToBottom', () => {
   it('moves scrollTop to the end', () => {
     const element = box(1000, 500, 0);
     scrollToBottom(element);
+    expect(element.scrollTop).toBe(1000);
+  });
+});
+
+describe('smoothScrollToBottom (FR-17)', () => {
+  it('asks the browser for a smooth scroll to the end', () => {
+    const scrollTo = vi.fn();
+    const element = { ...box(1000, 500, 0), scrollTo } as unknown as HTMLElement;
+    smoothScrollToBottom(element);
+    expect(scrollTo).toHaveBeenCalledWith({ top: 1000, behavior: 'smooth' });
+  });
+
+  it('falls back to a jump where scrollTo is missing', () => {
+    const element = box(1000, 500, 0);
+    smoothScrollToBottom(element);
     expect(element.scrollTop).toBe(1000);
   });
 });

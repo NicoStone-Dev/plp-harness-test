@@ -98,4 +98,30 @@ describe('chatSession', () => {
     });
     expect(connection.sent).toEqual([{ type: 'message', text: 'oi' }]);
   });
+
+  it('typed() sends at most one typing event per 500 ms and reports it on typingSent$ (FR-10)', () => {
+    const connection = fakeConnection(NEVER);
+    scheduler.run(({ hot, expectObservable }) => {
+      const session = chatSession('Ana', connection);
+      // Keystrokes at 1, 2, 300 (one window) and 600 (new window).
+      const keys$ = hot('-kk 297ms k 299ms k').pipe(tap(() => session.typed()));
+
+      expectObservable(session.typingSent$).toBe('-p 598ms p', { p: undefined });
+      expectObservable(keys$.pipe(ignoreElements()));
+    });
+    expect(connection.sent).toEqual([{ type: 'typing' }, { type: 'typing' }]);
+  });
+
+  it('typingNames$ lists other users typing, never the current user (FR-11, FR-13)', () => {
+    scheduler.run(({ hot, expectObservable }) => {
+      const event$ = hot<ServerEvent>('-j-s-b-m-', {
+        j: joined,
+        s: { type: 'typing', userId: 'me', name: 'Ana' },
+        b: { type: 'typing', userId: 'other', name: 'Bruno' },
+        m: msg(chat('3', 'other', 'pronto')),
+      });
+      const session = chatSession('Ana', fakeConnection(event$));
+      expectObservable(session.typingNames$).toBe('e----b-e-', { e: [], b: ['Bruno'] });
+    });
+  });
 });
