@@ -1,7 +1,8 @@
-import { filter, map, Observable, scan, share, startWith, Subject, switchMap, take, tap } from 'rxjs';
+import { filter, map, Observable, scan, share, shareReplay, startWith, Subject, switchMap, take, tap } from 'rxjs';
 import { normalizeText, type ServerEvent } from '../domain/events';
 import { toMessageView, type MessageView } from '../domain/message-view';
 import type { ChatConnection } from './chat-connection';
+import { typingSignal$, typists$ } from './typing';
 
 type JoinedEvent = Extract<ServerEvent, { type: 'joined' }>;
 type MessageEvent = Extract<ServerEvent, { type: 'message' }>;
@@ -19,6 +20,12 @@ export interface ChatSession {
   submit(text: string): void;
   /** Text that was actually sent. */
   readonly sent$: Observable<string>;
+  /** Report a keystroke in the message box. */
+  typed(): void;
+  /** Typing events actually sent to the server, at most one per 500 ms (FR-10). Subscribe to activate. */
+  readonly typingSent$: Observable<void>;
+  /** Names of the other users typing right now (FR-11 to FR-13). */
+  readonly typists$: Observable<readonly string[]>;
 }
 
 /** Server events -> this user's messages as views, once the join is acknowledged. */
@@ -61,5 +68,28 @@ export function chatSession(name: string, connection: ChatConnection): ChatSessi
   const outgoing$ = new Subject<string>();
   const sent$ = sentText$(outgoing$, (text) => connection.send({ type: 'message', text })).pipe(share());
 
-  return { name, message$, messages$, submit: (text) => outgoing$.next(text), sent$ };
+  const keystroke$ = new Subject<void>();
+  const typingSent$ = typingSignal$(keystroke$, sent$).pipe(
+    tap(() => connection.send({ type: 'typing' })),
+    share(),
+  );
+
+  const typing$ = connection.event$.pipe(
+    filter(isJoined),
+    take(1),
+    switchMap(({ userId }) => typists$(connection.event$, userId)),
+    startWith([] as readonly string[]),
+    shareReplay({ bufferSize: 1, refCount: true }),
+  );
+
+  return {
+    name,
+    message$,
+    messages$,
+    submit: (text) => outgoing$.next(text),
+    sent$,
+    typed: () => keystroke$.next(),
+    typingSent$,
+    typists$: typing$,
+  };
 }

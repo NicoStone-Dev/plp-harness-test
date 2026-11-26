@@ -42,3 +42,8 @@ export function nextRender(injector: Injector): Observable<void> {
     return () => ref.destroy();
   });
 }
+
+/** FR-17: smooth scroll to the bottom of the list. */
+export function smoothScrollToBottom(element: HTMLElement): void {
+  element.scrollTo({ top: element.scrollHeight, behavior: 'smooth' });
+}
