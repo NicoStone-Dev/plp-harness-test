@@ -2,6 +2,7 @@ import { filter, map, Observable, scan, share, startWith, Subject, switchMap, ta
 import { normalizeText, type ServerEvent } from '../domain/events';
 import { toMessageView, type MessageView } from '../domain/message-view';
 import type { ChatConnection } from './chat-connection';
+import { othersTyping$, typingPings$ } from './typing';
 
 type JoinedEvent = Extract<ServerEvent, { type: 'joined' }>;
 type MessageEvent = Extract<ServerEvent, { type: 'message' }>;
@@ -19,6 +20,12 @@ export interface ChatSession {
   submit(text: string): void;
   /** Text that was actually sent. */
   readonly sent$: Observable<string>;
+  /** Report a keystroke in the message box (FR-10). */
+  typed(): void;
+  /** Typing pings actually sent to the server, at most one per 500 ms (FR-10). Subscribe to send them. */
+  readonly typingSent$: Observable<void>;
+  /** Names of the other users typing right now, in the order they started (FR-11 to FR-13). */
+  readonly typingNames$: Observable<readonly string[]>;
 }
 
 /** Server events -> this user's messages as views, once the join is acknowledged. */
@@ -61,5 +68,22 @@ export function chatSession(name: string, connection: ChatConnection): ChatSessi
   const outgoing$ = new Subject<string>();
   const sent$ = sentText$(outgoing$, (text) => connection.send({ type: 'message', text })).pipe(share());
 
-  return { name, message$, messages$, submit: (text) => outgoing$.next(text), sent$ };
+  // Private to the session: callers report keystrokes through `typed`.
+  const keystroke$ = new Subject<void>();
+  const typingSent$ = typingPings$(keystroke$).pipe(
+    tap(() => connection.send({ type: 'typing' })),
+    share(),
+  );
+  const typingNames$ = othersTyping$(connection.event$);
+
+  return {
+    name,
+    message$,
+    messages$,
+    submit: (text) => outgoing$.next(text),
+    sent$,
+    typed: () => keystroke$.next(),
+    typingSent$,
+    typingNames$,
+  };
 }

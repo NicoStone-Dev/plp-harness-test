@@ -17,22 +17,30 @@ import {
   type Observable,
 } from 'rxjs';
 import { createMessage } from '../domain/chat-message.js';
-import type { ChatMessage, ClientEvent, ServerEvent } from '../domain/events.js';
+import type { ClientEvent, ServerEvent } from '../domain/events.js';
 import type { ChatClient } from './chat-client.js';
+import { throttleTyping$ } from './typing.js';
 
 type JoinEvent = Extract<ClientEvent, { type: 'join' }>;
 type SendEvent = Extract<ClientEvent, { type: 'message' }>;
+type TypingEvent = Extract<ClientEvent, { type: 'typing' }>;
 
 const isJoin = (event: ClientEvent): event is JoinEvent => event.type === 'join';
 const isSend = (event: ClientEvent): event is SendEvent => event.type === 'message';
+const isTyping = (event: ClientEvent): event is TypingEvent => event.type === 'typing';
+
+/** FR-13: a user's own typing events are never sent back to them. */
+const isFromOthers = (userId: string) => (event: ServerEvent) =>
+  !(event.type === 'typing' && event.userId === userId);
 
 /**
- * One chat room. Every joined client's messages are merged into `room$`
- * and fanned out to every joined client, in the order the server received them.
+ * One chat room. Every joined client's messages and typing events are merged into
+ * `room$` and fanned out to every joined client, in the order the server received them.
+ * Typing events skip the user who is typing (FR-13).
  */
 export function chatRoom(client$: Observable<ChatClient>): Observable<never> {
   // Private to this room: only handed to the room's own sessions.
-  const room$ = new Subject<ChatMessage>();
+  const room$ = new Subject<ServerEvent>();
 
   return client$.pipe(
     // One failing client must never take the room (or the server) down.
@@ -40,7 +48,7 @@ export function chatRoom(client$: Observable<ChatClient>): Observable<never> {
   );
 }
 
-function clientSession(client: ChatClient, room$: Subject<ChatMessage>): Observable<never> {
+function clientSession(client: ChatClient, room$: Subject<ServerEvent>): Observable<never> {
   const userId = randomUUID();
   const { event$ } = client;
 
@@ -58,14 +66,20 @@ function clientSession(client: ChatClient, room$: Subject<ChatMessage>): Observa
         // `room$` is a plain Subject, so there is no history (FR-07).
         concat(
           of<ServerEvent>({ type: 'joined', userId, name }),
-          room$.pipe(map((message): ServerEvent => ({ type: 'message', message }))),
+          room$.pipe(filter(isFromOthers(userId))),
         ).pipe(tap((event) => client.send(event))),
 
         // Inbound: this client's messages go to the room.
         event$.pipe(
           filter(isSend),
-          map((event) => createMessage(userId, name, event.text)),
-          tap((message) => room$.next(message)),
+          map((event): ServerEvent => ({ type: 'message', message: createMessage(userId, name, event.text) })),
+          tap((event) => room$.next(event)),
+        ),
+
+        // Inbound: this client's keystrokes, at most one per 500 ms (FR-10), go to the room.
+        throttleTyping$(event$.pipe(filter(isTyping))).pipe(
+          map((): ServerEvent => ({ type: 'typing', userId, name })),
+          tap((event) => room$.next(event)),
         ),
       ),
     ),

@@ -12,6 +12,11 @@ export function scrollToBottom(element: HTMLElement): void {
   element.scrollTop = element.scrollHeight;
 }
 
+/** FR-17: animated scroll to the bottom (the unread pill). */
+export function scrollToBottomSmoothly(element: HTMLElement): void {
+  element.scrollTo({ top: element.scrollHeight, behavior: 'smooth' });
+}
+
 /**
  * FR-05 / FR-06: for each new message, decide *before* it is rendered whether to
  * follow it (own message, or the user was already near the bottom), then emit

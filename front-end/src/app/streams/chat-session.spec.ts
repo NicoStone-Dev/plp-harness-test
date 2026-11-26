@@ -98,4 +98,30 @@ describe('chatSession', () => {
     });
     expect(connection.sent).toEqual([{ type: 'message', text: 'oi' }]);
   });
+
+  it('typed() sends at most one typing event per 500 ms and reports it on typingSent$ (FR-10)', () => {
+    const connection = fakeConnection(NEVER);
+    scheduler.run(({ hot, expectObservable }) => {
+      const session = chatSession('Ana', connection);
+      // Keystrokes at 1, 2, 3 and 600 ms.
+      const keys$ = hot('-kkk 596ms k', { k: undefined }).pipe(tap(() => session.typed()));
+
+      expectObservable(session.typingSent$).toBe('-t 598ms t', { t: undefined });
+      expectObservable(keys$.pipe(ignoreElements()));
+    });
+    expect(connection.sent).toEqual([{ type: 'typing' }, { type: 'typing' }]);
+  });
+
+  it("typingNames$ lists other users typing, without the user's own name (FR-11, FR-13)", () => {
+    scheduler.run(({ hot, expectObservable }) => {
+      const event$ = hot<ServerEvent>('-j-a-s', {
+        j: joined,
+        a: { type: 'typing', userId: 'other', name: 'Bruno' },
+        s: { type: 'typing', userId: 'me', name: 'Ana' },
+      });
+      const session = chatSession('Ana', fakeConnection(event$));
+
+      expectObservable(session.typingNames$, '^ 100ms !').toBe('e--a', { e: [], a: ['Bruno'] });
+    });
+  });
 });

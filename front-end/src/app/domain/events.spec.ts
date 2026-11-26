@@ -86,3 +86,33 @@ describe('parseServerEvent', () => {
     expect(parseServerEvent(raw)).toBeNull();
   });
 });
+
+describe('typing events (FR-10, FR-11)', () => {
+  it('parses a client typing event, ignoring extra fields', () => {
+    expect(parseClientEvent('{"type":"typing"}')).toEqual({ type: 'typing' });
+    expect(parseClientEvent('{"type":"typing","name":"Eve","userId":"x"}')).toEqual({ type: 'typing' });
+  });
+
+  it('parses a server typing event with the typer id and name', () => {
+    expect(parseServerEvent('{"type":"typing","userId":"u1","name":"Ana"}')).toEqual({
+      type: 'typing',
+      userId: 'u1',
+      name: 'Ana',
+    });
+  });
+
+  it.each([
+    ['typing without userId', '{"type":"typing","name":"Ana"}'],
+    ['typing without name', '{"type":"typing","userId":"u1"}'],
+    ['typing with non-string name', '{"type":"typing","userId":"u1","name":5}'],
+    ['typing as an array', '[{"type":"typing"}]'],
+  ])('returns null for server %s (R8)', (_label, raw) => {
+    expect(() => parseServerEvent(raw)).not.toThrow();
+    expect(parseServerEvent(raw)).toBeNull();
+  });
+
+  it('returns null for a client typing event that is not an object (R8)', () => {
+    expect(parseClientEvent('"typing"')).toBeNull();
+    expect(parseClientEvent('{"type":"Typing"}')).toBeNull();
+  });
+});
