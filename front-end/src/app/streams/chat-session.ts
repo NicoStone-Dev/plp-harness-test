@@ -1,7 +1,8 @@
-import { filter, map, Observable, scan, share, startWith, Subject, switchMap, take, tap } from 'rxjs';
+import { filter, map, mergeMap, Observable, of, scan, share, startWith, Subject, switchMap, take, tap } from 'rxjs';
 import { normalizeText, type ServerEvent } from '../domain/events';
 import { toMessageView, type MessageView } from '../domain/message-view';
 import type { ChatConnection } from './chat-connection';
+import { typingPings$, typingUsers$, type TypingSignal } from './typing';
 
 type JoinedEvent = Extract<ServerEvent, { type: 'joined' }>;
 type MessageEvent = Extract<ServerEvent, { type: 'message' }>;
@@ -19,6 +20,12 @@ export interface ChatSession {
   submit(text: string): void;
   /** Text that was actually sent. */
   readonly sent$: Observable<string>;
+  /** Names of the other users currently typing, in the order they started (FR-11 to FR-13). */
+  readonly typing$: Observable<readonly string[]>;
+  /** Report a keystroke in the message box (FR-10). */
+  keystroke(): void;
+  /** Typing pings actually sent: at most one per 500 ms. Must be subscribed for pings to go out. */
+  readonly typingSent$: Observable<void>;
 }
 
 /** Server events -> this user's messages as views, once the join is acknowledged. */
@@ -31,6 +38,28 @@ export function messageViews$(event$: Observable<ServerEvent>): Observable<Messa
       event$.pipe(
         filter(isMessage),
         map(({ message }) => toMessageView(message, userId)),
+      ),
+    ),
+  );
+}
+
+/**
+ * Server events -> what we learn about other users typing, once the join is acknowledged.
+ * Our own id is filtered out (FR-13); a message from someone means they stopped (FR-12).
+ */
+export function typingSignals$(event$: Observable<ServerEvent>): Observable<TypingSignal> {
+  return event$.pipe(
+    filter(isJoined),
+    take(1),
+    switchMap(({ userId: selfId }) =>
+      event$.pipe(
+        mergeMap((event): Observable<TypingSignal> => {
+          if (event.type === 'typing' && event.userId !== selfId) {
+            return of({ kind: 'typing', userId: event.userId, name: event.name });
+          }
+          if (event.type === 'message') return of({ kind: 'stopped', userId: event.message.authorId });
+          return of();
+        }),
       ),
     ),
   );
@@ -61,5 +90,23 @@ export function chatSession(name: string, connection: ChatConnection): ChatSessi
   const outgoing$ = new Subject<string>();
   const sent$ = sentText$(outgoing$, (text) => connection.send({ type: 'message', text })).pipe(share());
 
-  return { name, message$, messages$, submit: (text) => outgoing$.next(text), sent$ };
+  const typing$ = typingUsers$(typingSignals$(connection.event$));
+
+  // Private to the session: callers report keystrokes through `keystroke`.
+  const keystroke$ = new Subject<void>();
+  const typingSent$ = typingPings$(keystroke$).pipe(
+    tap(() => connection.send({ type: 'typing' })),
+    share(),
+  );
+
+  return {
+    name,
+    message$,
+    messages$,
+    submit: (text) => outgoing$.next(text),
+    sent$,
+    typing$,
+    keystroke: () => keystroke$.next(),
+    typingSent$,
+  };
 }

@@ -14,6 +14,8 @@ beforeEach(() => {
 
 const join = (name: string): ClientEvent => ({ type: 'join', name });
 const say = (text: string): ClientEvent => ({ type: 'message', text });
+const keystroke: ClientEvent = { type: 'typing' };
+const typing = (name: string): ServerEvent => ({ type: 'typing', userId: expect.any(String), name });
 const joined = (name: string): ServerEvent => ({ type: 'joined', userId: expect.any(String), name });
 const heard = (author: string, text: string): ServerEvent => ({
   type: 'message',
@@ -126,6 +128,58 @@ describe('chatRoom', () => {
     scheduler.run(({ cold, expectObservable }) => {
       const broken = fakeClient(NEVER, NEVER, throwError(() => new Error('x')));
       expectObservable(chatRoom(cold('a', { a: broken.client }))).toBe('---');
+    });
+  });
+
+  describe('typing indicator', () => {
+    it('relays typing to the other clients, never back to the typist (FR-11, FR-13)', () => {
+      scheduler.run(({ hot, cold, expectObservable }) => {
+        const ana = fakeClient(hot('-a---t----', { a: join('Ana'), t: keystroke }));
+        const bruno = fakeClient(hot('--a-------', { a: join('Bruno') }));
+        const carla = fakeClient(hot('---a------', { a: join('Carla') }));
+
+        expectObservable(ana.sent$).toBe('-a--------', { a: joined('Ana') });
+        expectObservable(bruno.sent$).toBe('--a--t----', { a: joined('Bruno'), t: typing('Ana') });
+        expectObservable(carla.sent$).toBe('---a-t----', { a: joined('Carla'), t: typing('Ana') });
+        expectObservable(chatRoom(cold('(abc)', { a: ana.client, b: bruno.client, c: carla.client })));
+      });
+    });
+
+    it('relays at most one typing event per 500 ms per user (FR-10)', () => {
+      scheduler.run(({ hot, cold, expectObservable }) => {
+        // Ana floods: t at 11, 12, 13, 301, 512. Only 11 and 512 get through.
+        const ana = fakeClient(hot('-a 9ms ttt 287ms t 210ms t', { a: join('Ana'), t: keystroke }));
+        // Bruno's own throttle window is independent of Ana's.
+        const bruno = fakeClient(hot('-a 10ms t', { a: join('Bruno'), t: keystroke }));
+
+        expectObservable(bruno.sent$).toBe('-a 9ms t 500ms t', { a: joined('Bruno'), t: typing('Ana') });
+        expectObservable(ana.sent$).toBe('-a 10ms t', { a: joined('Ana'), t: typing('Bruno') });
+        expectObservable(chatRoom(cold('(ab)', { a: ana.client, b: bruno.client })));
+      });
+    });
+
+    it('ignores typing before join', () => {
+      scheduler.run(({ hot, cold, expectObservable }) => {
+        const ana = fakeClient(hot('-t-a-----', { t: keystroke, a: join('Ana') }));
+        const bruno = fakeClient(hot('-a-------', { a: join('Bruno') }));
+
+        expectObservable(bruno.sent$).toBe('-a-------', { a: joined('Bruno') });
+        expectObservable(chatRoom(cold('(ab)', { a: ana.client, b: bruno.client })));
+      });
+    });
+
+    it('keeps typing and messages in server order', () => {
+      scheduler.run(({ hot, cold, expectObservable }) => {
+        const ana = fakeClient(hot('-a-t-m---', { a: join('Ana'), t: keystroke, m: say('oi') }));
+        const bruno = fakeClient(hot('-a-------', { a: join('Bruno') }));
+
+        expectObservable(bruno.sent$).toBe('-a-t-m---', {
+          a: joined('Bruno'),
+          t: typing('Ana'),
+          m: heard('Ana', 'oi'),
+        });
+        expectObservable(chatRoom(cold('(ab)', { a: ana.client, b: bruno.client })));
+      });
     });
   });
 });

@@ -46,6 +46,21 @@ describe('clientEvent$ (R8, FR-08)', () => {
   });
 });
 
+describe('clientEvent$ typing frames (R8, FR-10)', () => {
+  it('passes typing pings and drops malformed ones', async () => {
+    const socket = new FakeSocket();
+    const events = firstValueFrom(clientEvent$(asSocket(socket)).pipe(take(2), toArray()));
+
+    socket.emit('message', frame('{"type":"typing"'), false); // truncated
+    socket.emit('message', frame({ type: 'typing' }), true); // binary
+    socket.emit('message', frame({ type: 'typing', userId: 'forged' }), false);
+    socket.emit('message', frame('"typing"'), false);
+    socket.emit('message', frame({ type: 'typing' }), false);
+
+    expect(await events).toEqual([{ type: 'typing' }, { type: 'typing' }]);
+  });
+});
+
 describe('closed$', () => {
   it('emits once and completes', async () => {
     const socket = new FakeSocket();

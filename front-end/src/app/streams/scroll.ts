@@ -12,6 +12,15 @@ export function scrollToBottom(element: HTMLElement): void {
   element.scrollTop = element.scrollHeight;
 }
 
+/** FR-17: animated scroll to the bottom; jumps where smooth scrolling is unavailable. */
+export function scrollToBottomSmoothly(element: HTMLElement): void {
+  if (typeof element.scrollTo === 'function') {
+    element.scrollTo({ top: element.scrollHeight, behavior: 'smooth' });
+  } else {
+    scrollToBottom(element);
+  }
+}
+
 /**
  * FR-05 / FR-06: for each new message, decide *before* it is rendered whether to
  * follow it (own message, or the user was already near the bottom), then emit
