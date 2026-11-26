@@ -1,11 +1,24 @@
 import { AsyncPipe, DatePipe } from '@angular/common';
-import { Component, computed, ElementRef, inject, Injector, input, OnInit, viewChild } from '@angular/core';
+import {
+  Component,
+  computed,
+  ElementRef,
+  inject,
+  Injector,
+  input,
+  OnInit,
+  type Signal,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
-import { tap } from 'rxjs';
+import { filter, merge, Subject, tap } from 'rxjs';
+import { typingParts, unreadLabel } from '../../domain/indicators';
 import { initialOf, toneOf } from '../../domain/message-view';
 import type { ChatSession } from '../../streams/chat-session';
-import { autoScroll$, isNearBottom, nextRender, scrollToBottom } from '../../streams/scroll';
+import { autoScroll$, isNearBottom, nextRender, scrollToBottom, scrollToBottomSmoothly } from '../../streams/scroll';
+import { unreadCount$ } from '../../streams/unread';
 
 @Component({
   selector: 'app-chat-room',
@@ -19,6 +32,15 @@ export class ChatRoom implements OnInit {
   protected readonly initial = computed(() => initialOf(this.session().name));
   protected readonly tone = computed(() => toneOf(this.session().name));
   protected readonly draft = new FormControl('', { nonNullable: true });
+  protected readonly typingParts = typingParts;
+  protected readonly unreadLabel = unreadLabel;
+
+  /** FR-15 to FR-19: messages from others that arrived while scrolled up. */
+  protected unread: Signal<number> = signal(0);
+
+  // DOM events of the template, as streams.
+  private readonly scroll$ = new Subject<void>();
+  private readonly pillClick$ = new Subject<void>();
 
   private readonly list = viewChild.required<ElementRef<HTMLElement>>('list');
   private readonly injector = inject(Injector);
@@ -42,9 +64,35 @@ export class ChatRoom implements OnInit {
 
     // FR-02: clear the input once the text has been sent.
     toSignal(session.sent$.pipe(tap(() => this.draft.setValue(''))), { injector: this.injector });
+
+    // FR-10: keystrokes go out as throttled typing events.
+    toSignal(session.typingSent$, { injector: this.injector });
+
+    // FR-17: the pill scrolls smoothly to the bottom.
+    toSignal(this.pillClick$.pipe(tap(() => scrollToBottomSmoothly(element()))), { injector: this.injector });
+
+    // FR-15 to FR-19: count while scrolled up; the pill or reaching the bottom resets it.
+    const reachedBottom$ = this.scroll$.pipe(filter(() => isNearBottom(element())));
+    this.unread = toSignal(
+      unreadCount$(session.message$, () => isNearBottom(element()), merge(this.pillClick$, reachedBottom$)),
+      { initialValue: 0, injector: this.injector },
+    );
   }
 
   protected send(): void {
     this.session().submit(this.draft.value);
+  }
+
+  /** Only real user input counts as typing (not the input being cleared after sending). */
+  protected typed(): void {
+    this.session().keystroke();
+  }
+
+  protected scrolled(): void {
+    this.scroll$.next();
+  }
+
+  protected showNewMessages(): void {
+    this.pillClick$.next();
   }
 }
